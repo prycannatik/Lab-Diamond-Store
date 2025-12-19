@@ -3,31 +3,44 @@ import React, { useState, useEffect } from "react";
 import LabDiamondStore from "./LabDiamondStore";
 import { Lock, Construction, ArrowRight, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { supabase } from "./lib/supabase"; //
 
-// --- 🛠 CONFIGURATION: TOGGLE LOCK HERE 🛠 ---
-// Change this to 'false' when you are ready to launch the site.
+// --- 🛠 CONFIGURATION 🛠 ---
+// Set this to false when you are ready to launch the site.
 const IS_CONSTRUCTION_MODE = true; 
-const ACCESS_PASSWORD = "admin";
-// --------------------------------------------
+// ----------------------------
 
 function UnderConstruction({ onUnlock }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(false);
     
-    // Simulate a network check delay
-    setTimeout(() => {
-      if (password === ACCESS_PASSWORD) {
+    try {
+      const { data, error } = await supabase
+        .from('access_codes')
+        .select('id')
+        .eq('code', password)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
         onUnlock();
       } else {
         setError(true);
-        setLoading(false);
       }
-    }, 600);
+    } catch (err) {
+      console.error("Verification failed:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -106,14 +119,14 @@ export default function App() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // 1. Check if Construction Mode is disabled globally
+    // 1. Check global toggle
     if (!IS_CONSTRUCTION_MODE) {
       setIsLocked(false);
       setChecking(false);
       return;
     }
 
-    // 2. If enabled, check if user has already unlocked it this session
+    // 2. Check session storage
     const unlocked = sessionStorage.getItem("site_unlocked");
     if (unlocked === "true") {
       setIsLocked(false);
@@ -126,14 +139,11 @@ export default function App() {
     setIsLocked(false);
   };
 
-  // Prevent flickering while checking session storage
   if (checking) return null;
 
-  // If locked, show the gatekeeper component
   if (isLocked) {
     return <UnderConstruction onUnlock={handleUnlock} />;
   }
 
-  // Otherwise, render the main store
   return <LabDiamondStore />;
 }
